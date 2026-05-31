@@ -1,6 +1,7 @@
 {
-  "$schema": "https://busbar.agency/schemas/busbar-module-v1.json",
-  "schemaVersion": "1",
+  "$schema": "https://busbar.agency/schemas/busbar-module-v2.json",
+  "schemaVersion": "2",
+  "type": "action",
   "module": {
     "id": "sf-org-create",
     "name": "Busbar Org Create",
@@ -13,6 +14,24 @@
     "compatibilityNote": null,
     "requires": [],
     "provides": ["sf-session"]
+  },
+  "interface": {
+    "uses": "busbar-actions/sf-org-create@main",
+    "inputs": [
+      { "name": "org-name", "type": "string", "label": "Org name", "required": true, "description": "Name for the new scratch org." },
+      { "name": "admin-email", "type": "string", "label": "Admin email", "required": true, "description": "Admin email for the scratch org." },
+      { "name": "snapshot", "type": "string", "label": "Snapshot (optional)", "default": "", "description": "Snapshot name or id to create the org from (create-from-snapshot)." },
+      { "name": "edition", "type": "enum", "label": "Edition", "options": ["Developer", "Enterprise", "Group", "Professional", "Partner Developer"], "default": "Developer", "description": "Scratch org edition." },
+      { "name": "duration-days", "type": "string", "label": "Duration (days)", "default": "7", "description": "How long the scratch org lives (1-30)." }
+    ],
+    "requires": [],
+    "provides": ["sf-session"]
+  },
+  "envelope": {
+    "permissions": { "contents": "read", "id-token": "write" },
+    "network": ["api.github.com", "objects.githubusercontent.com"],
+    "safe-outputs": [],
+    "sf-scopes": ["devhub-scratch-create"]
   },
   "publisher": {
     "id": "busbar/core",
