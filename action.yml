@@ -56,76 +56,52 @@ inputs:
 outputs:
   scratch-org-info-id:
     description: 'The DevHub-side ScratchOrgInfo record id.'
-    value: ${{ steps.create.outputs.scratch-org-info-id }}
+    value: ${{ steps.create.outputs.scratch_org_info_id }}
   scratch-org-id:
     description: 'The created scratch orgs 15-char id.'
-    value: ${{ steps.create.outputs.scratch-org-id }}
+    value: ${{ steps.create.outputs.scratch_org_id }}
   username:
     description: 'The created scratch orgs admin username.'
     value: ${{ steps.create.outputs.username }}
+  login-url:
+    description: 'Login URL for the created scratch org.'
+    value: ${{ steps.create.outputs.login_url }}
   credentials-path:
     description: 'Path to the JSON file containing the new orgs credential context.'
     value: ${{ inputs.credentials-output }}
 
+# The binary owns all logic and UX: it reads its inputs from INPUT_*, auths the
+# DevHub via busbar-auth (SF_*/OIDC/ECA env), creates + polls the scratch org,
+# redeems the AuthCode, writes the credentials JSON, and emits GITHUB_OUTPUT, the
+# step summary and an annotation. This action only installs it and passes inputs
+# + auth/config env through.
 runs:
   using: 'composite'
   steps:
-    - name: Resolve release tag
-      id: tag
-      shell: bash
-      run: |
-        set -euo pipefail
-        if [[ "${{ inputs.version }}" == "latest" ]]; then
-          tag=$(gh release view --repo "${{ inputs.binary-repo }}" --json tagName -q .tagName)
-        else
-          tag="${{ inputs.version }}"
-        fi
-        echo "tag=$tag" >> "$GITHUB_OUTPUT"
-      env:
-        GH_TOKEN: ${{ github.token }}
-
-    - name: Resolve binary asset name
-      id: asset
-      shell: bash
-      run: |
-        case "${{ runner.os }}-${{ runner.arch }}" in
-          Linux-X64)   name="sf-org-create-x86_64-unknown-linux-gnu" ;;
-          Linux-ARM64) name="sf-org-create-aarch64-unknown-linux-gnu" ;;
-          macOS-X64)   name="sf-org-create-x86_64-apple-darwin" ;;
-          macOS-ARM64) name="sf-org-create-aarch64-apple-darwin" ;;
-          Windows-X64) name="sf-org-create-x86_64-pc-windows-msvc.exe" ;;
-          *) echo "Unsupported runner: ${{ runner.os }}-${{ runner.arch }}" >&2; exit 1 ;;
-        esac
-        echo "name=$name" >> "$GITHUB_OUTPUT"
-
-    - name: Download sf-org-create binary
-      shell: bash
-      run: |
-        set -euo pipefail
-        bin_dir="${RUNNER_TEMP}/sf-org-create"
-        mkdir -p "$bin_dir"
-        gh release download "${{ steps.tag.outputs.tag }}" \
-          --repo "${{ inputs.binary-repo }}" \
-          --pattern "${{ steps.asset.outputs.name }}" \
-          --dir "$bin_dir"
-        bin_path="$bin_dir/${{ steps.asset.outputs.name }}"
-        chmod +x "$bin_path"
-        echo "$bin_dir" >> "$GITHUB_PATH"
-        if [[ "$bin_path" != "$bin_dir/sf-org-create" && "$bin_path" != "$bin_dir/sf-org-create.exe" ]]; then
-          ext=""
-          [[ "${{ runner.os }}" == "Windows" ]] && ext=".exe"
-          ln -sf "$bin_path" "$bin_dir/sf-org-create$ext"
-        fi
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - name: Set up sf-org-create
+      uses: busbar-actions/setup@main
+      with:
+        binary: sf-org-create
+        version: ${{ inputs.version }}
+        binary-repo: ${{ inputs.binary-repo }}
 
     - name: Create scratch org
       id: create
       shell: bash
-      # Auth + ECA client come from the GitHub Environment (Variables, not
-      # Secrets — per config-from-environments). Secrets only for the access
-      # token in the local-dev fallback path.
+      # Operational selectors arrive as INPUT_*. Auth + ECA client come from the
+      # GitHub Environment (Variables, not Secrets — per config-from-environments);
+      # secrets only for the access token in the local-dev fallback path.
       env:
+        INPUT_ORG_NAME: ${{ inputs.org-name }}
+        INPUT_ADMIN_EMAIL: ${{ inputs.admin-email }}
+        INPUT_EDITION: ${{ inputs.edition }}
+        INPUT_DURATION_DAYS: ${{ inputs.duration-days }}
+        INPUT_NAMESPACE: ${{ inputs.namespace }}
+        INPUT_FEATURES: ${{ inputs.features }}
+        INPUT_DESCRIPTION: ${{ inputs.description }}
+        INPUT_SNAPSHOT: ${{ inputs.snapshot }}
+        INPUT_POLL_TIMEOUT_SECS: ${{ inputs.poll-timeout-secs }}
+        INPUT_CREDENTIALS_OUTPUT: ${{ inputs.credentials-output }}
         SF_ACCESS_TOKEN: ${{ env.SF_ACCESS_TOKEN }}
         SF_INSTANCE_URL: ${{ env.SF_INSTANCE_URL }}
         BUSBAR_ECA_CLIENT_ID: ${{ env.BUSBAR_ECA_CLIENT_ID }}
@@ -134,23 +110,4 @@ runs:
         BUSBAR_OIDC_AUDIENCE: ${{ env.BUSBAR_OIDC_AUDIENCE }}
         ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
         ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
-      run: |
-        set -euo pipefail
-        args=(--org-name "${{ inputs.org-name }}"
-              --admin-email "${{ inputs.admin-email }}"
-              --edition "${{ inputs.edition }}"
-              --duration-days "${{ inputs.duration-days }}"
-              --poll-timeout-secs "${{ inputs.poll-timeout-secs }}"
-              --output "${{ inputs.credentials-output }}")
-        [[ -n "${{ inputs.namespace }}" ]] && args+=(--namespace "${{ inputs.namespace }}")
-        [[ -n "${{ inputs.features }}" ]] && args+=(--features "${{ inputs.features }}")
-        [[ -n "${{ inputs.description }}" ]] && args+=(--description "${{ inputs.description }}")
-        [[ -n "${{ inputs.snapshot }}" ]] && args+=(--snapshot "${{ inputs.snapshot }}")
-
-        mkdir -p "$(dirname "${{ inputs.credentials-output }}")"
-        sf-org-create "${args[@]}"
-
-        # Echo non-secret outputs only (no token).
-        jq -r '"scratch-org-info-id=" + .scratch_org_info_id' "${{ inputs.credentials-output }}" >> "$GITHUB_OUTPUT"
-        jq -r '"scratch-org-id=" + .scratch_org_id'           "${{ inputs.credentials-output }}" >> "$GITHUB_OUTPUT"
-        jq -r '"username=" + .username'                       "${{ inputs.credentials-output }}" >> "$GITHUB_OUTPUT"
+      run: sf-org-create
