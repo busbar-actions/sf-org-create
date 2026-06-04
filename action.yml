@@ -44,6 +44,14 @@ inputs:
     description: 'Path to write the resulting credentials JSON.'
     required: false
     default: '.busbar/scratch-credentials.json'
+  settings:
+    description: 'Inline scratch-org-definition `settings` object as JSON. Deployed to the new org via the Metadata API after creation. Takes precedence over definition-file.'
+    required: false
+    default: ''
+  definition-file:
+    description: 'Path to a scratch-org-definition JSON; its `settings` block is deployed to the new org after creation.'
+    required: false
+    default: ''
   version:
     description: 'Release tag of the sf-org-create binary (e.g. v0.1.0). "latest" resolves the most recent release.'
     required: false
@@ -102,6 +110,8 @@ runs:
         INPUT_SNAPSHOT: ${{ inputs.snapshot }}
         INPUT_POLL_TIMEOUT_SECS: ${{ inputs.poll-timeout-secs }}
         INPUT_CREDENTIALS_OUTPUT: ${{ inputs.credentials-output }}
+        INPUT_SETTINGS: ${{ inputs.settings }}
+        INPUT_DEFINITION_FILE: ${{ inputs.definition-file }}
         SF_ACCESS_TOKEN: ${{ env.SF_ACCESS_TOKEN }}
         SF_INSTANCE_URL: ${{ env.SF_INSTANCE_URL }}
         # Leg-1 (OIDC → DevHub): the busbar ECA consumer key.
