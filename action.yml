@@ -104,8 +104,13 @@ runs:
         INPUT_CREDENTIALS_OUTPUT: ${{ inputs.credentials-output }}
         SF_ACCESS_TOKEN: ${{ env.SF_ACCESS_TOKEN }}
         SF_INSTANCE_URL: ${{ env.SF_INSTANCE_URL }}
+        # Leg-1 (OIDC → DevHub): the busbar ECA consumer key.
         BUSBAR_ECA_CLIENT_ID: ${{ env.BUSBAR_ECA_CLIENT_ID }}
-        BUSBAR_ECA_CALLBACK_URL: ${{ env.BUSBAR_ECA_CALLBACK_URL }}
+        # Leg-2 (the scratch's own connected app): defaults to PlatformCLI +
+        # loopback inside the binary when unset — override per-environment only
+        # if a Dev Hub needs a different scratch-signup connected app.
+        BUSBAR_SCRATCH_CONSUMER_KEY: ${{ env.BUSBAR_SCRATCH_CONSUMER_KEY }}
+        BUSBAR_SCRATCH_CALLBACK_URL: ${{ env.BUSBAR_SCRATCH_CALLBACK_URL }}
         BUSBAR_TOKEN_HANDLER: ${{ env.BUSBAR_TOKEN_HANDLER }}
         BUSBAR_OIDC_AUDIENCE: ${{ env.BUSBAR_OIDC_AUDIENCE }}
         ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
