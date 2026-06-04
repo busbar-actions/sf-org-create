@@ -54,16 +54,16 @@ inputs:
     default: 'busbar-actions/actions-dist'
 
 outputs:
-  scratch-org-info-id:
+  scratch_org_info_id:
     description: 'The DevHub-side ScratchOrgInfo record id.'
     value: ${{ steps.create.outputs.scratch_org_info_id }}
-  scratch-org-id:
+  scratch_org_id:
     description: 'The created scratch orgs 15-char id.'
     value: ${{ steps.create.outputs.scratch_org_id }}
   username:
     description: 'The created scratch orgs admin username.'
     value: ${{ steps.create.outputs.username }}
-  login-url:
+  login_url:
     description: 'Login URL for the created scratch org.'
     value: ${{ steps.create.outputs.login_url }}
   credentials-path:
