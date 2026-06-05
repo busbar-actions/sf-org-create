@@ -5,7 +5,24 @@ author: 'Busbar'
 # Per the config-from-environments convention, secrets/config come from the
 # GitHub Environment as env vars (consistent var names so Environments swap
 # values per-env). Only operational selectors are inputs.
+#
+# AUTH (self-mint via OIDC — the DEFAULT, primary path): set `target-instance`
+# to the Busbar-equipped DevHub's instance URL (e.g. busbar-pilot-demo2) and
+# grant `permissions:
+# id-token: write` in the caller job. The binary then mints its OWN short-lived
+# Salesforce token IN-PROCESS from the runner's GitHub OIDC id-token, uses it,
+# and revokes + zeroizes it at exit (SalesforceSession::dispose). No Salesforce
+# access token is ever handed to a script, written to GITHUB_ENV, or passed as
+# an action input/output. There is NO org-auth handoff step.
 inputs:
+  target-instance:
+    description: >-
+      PRIMARY OIDC path: instance URL of the Busbar-equipped DevHub to mint a
+      short-lived token against (e.g. busbar-pilot-demo2).
+      Passed to the binary as SF_INSTANCE_URL; with `id-token: write` granted,
+      busbar-auth OIDC-exchanges in-process (no SF_ACCESS_TOKEN handoff).
+    required: false
+    default: ''
   org-name:
     description: 'Org name for the new scratch.'
     required: true
@@ -52,6 +69,34 @@ inputs:
     description: 'Path to a scratch-org-definition JSON; its `settings` block is deployed to the new org after creation.'
     required: false
     default: ''
+  eca-client-id:
+    description: 'Optional OIDC tuning: the busbar ECA consumer key (client_id). Maps to ECA_CLIENT_ID. Has a baked default; override only on a PBO consumer rotation.'
+    required: false
+    default: ''
+  token-handler:
+    description: 'Optional OIDC tuning: the Apex token-exchange handler dev name. Maps to TOKEN_HANDLER_APEX. Defaults to BBGitHubTokenExchangeHandler.'
+    required: false
+    default: ''
+  oidc-audience:
+    description: 'Optional OIDC tuning: audience to request in the GitHub OIDC token. Maps to OIDC_AUDIENCE. Defaults to the target instance URL.'
+    required: false
+    default: ''
+  sf-instance-url:
+    description: >-
+      OPTIONAL local-dev/advanced override of the DevHub instance URL. When set,
+      takes precedence over `target-instance`. Pair with `sf-access-token` to use
+      the binary's local-dev fast path (skips OIDC); leave `sf-access-token` empty
+      to OIDC-mint against this URL instead.
+    required: false
+    default: ''
+  sf-access-token:
+    description: >-
+      OPTIONAL local-dev/advanced override ONLY. A pre-obtained DevHub access
+      token. When set (with an instance URL), the binary uses it directly and
+      skips OIDC self-minting. Leave EMPTY in CI — the default OIDC path mints a
+      short-lived token in-process so no token is ever handed to this action.
+    required: false
+    default: ''
   version:
     description: 'Release tag of the sf-org-create binary (e.g. v0.1.0). "latest" resolves the most recent release.'
     required: false
@@ -86,19 +131,23 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Set up sf-org-create
+    - name: Install the sf-org-create binary from actions-dist
       uses: busbar-actions/setup@main
       with:
         binary: sf-org-create
         version: ${{ inputs.version }}
         binary-repo: ${{ inputs.binary-repo }}
 
-    - name: Create scratch org
+    - name: Create the "${{ inputs.org-name }}" ${{ inputs.edition }}-edition scratch org via the DevHub (${{ inputs.sf-instance-url != '' && inputs.sf-instance-url || inputs.target-instance }})
       id: create
       shell: bash
-      # Operational selectors arrive as INPUT_*. Auth + ECA client come from the
-      # GitHub Environment (Variables, not Secrets — per config-from-environments);
-      # secrets only for the access token in the local-dev fallback path.
+      # Operational selectors arrive as INPUT_*. AUTH (default): self-mint via
+      # OIDC — SF_INSTANCE_URL = the Busbar-equipped DevHub (`target-instance`), and the
+      # caller grants `id-token: write` so the runner injects
+      # ACTIONS_ID_TOKEN_REQUEST_*; the binary then mints + revokes its own
+      # short-lived token in-process. We do NOT set SF_ACCESS_TOKEN here (no
+      # token handoff, nothing written to GITHUB_ENV). SF_ACCESS_TOKEN is only
+      # populated from the optional `sf-access-token` local-dev override input.
       env:
         INPUT_ORG_NAME: ${{ inputs.org-name }}
         INPUT_ADMIN_EMAIL: ${{ inputs.admin-email }}
@@ -112,9 +161,18 @@ runs:
         INPUT_CREDENTIALS_OUTPUT: ${{ inputs.credentials-output }}
         INPUT_SETTINGS: ${{ inputs.settings }}
         INPUT_DEFINITION_FILE: ${{ inputs.definition-file }}
-        SF_ACCESS_TOKEN: ${{ env.SF_ACCESS_TOKEN }}
-        SF_INSTANCE_URL: ${{ env.SF_INSTANCE_URL }}
-        # Leg-1 (OIDC → DevHub): the busbar ECA consumer key.
+        # DevHub instance URL: the optional override wins, else the primary
+        # `target-instance` OIDC input.
+        SF_INSTANCE_URL: ${{ inputs.sf-instance-url != '' && inputs.sf-instance-url || inputs.target-instance }}
+        # OPTIONAL local-dev override ONLY. Empty in CI → busbar-auth self-mints
+        # via OIDC. NEVER sourced from the Environment / GITHUB_ENV.
+        SF_ACCESS_TOKEN: ${{ inputs.sf-access-token }}
+        # OIDC tuning (all optional; baked defaults in busbar-auth). Surfaced as
+        # inputs so a caller can override per-run; otherwise empty = use defaults.
+        ECA_CLIENT_ID: ${{ inputs.eca-client-id }}
+        TOKEN_HANDLER_APEX: ${{ inputs.token-handler }}
+        OIDC_AUDIENCE: ${{ inputs.oidc-audience }}
+        # Leg-1 (OIDC → DevHub) ECA fallback consumer key from the Environment.
         BUSBAR_ECA_CLIENT_ID: ${{ env.BUSBAR_ECA_CLIENT_ID }}
         # Leg-2 (the scratch's own connected app): defaults to PlatformCLI +
         # loopback inside the binary when unset — override per-environment only
@@ -123,6 +181,26 @@ runs:
         BUSBAR_SCRATCH_CALLBACK_URL: ${{ env.BUSBAR_SCRATCH_CALLBACK_URL }}
         BUSBAR_TOKEN_HANDLER: ${{ env.BUSBAR_TOKEN_HANDLER }}
         BUSBAR_OIDC_AUDIENCE: ${{ env.BUSBAR_OIDC_AUDIENCE }}
+        # GitHub injects these only when the caller job grants id-token: write.
         ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
         ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
-      run: sf-org-create
+      run: |
+        set -euo pipefail
+        echo "▶ TESTING: create a ${INPUT_EDITION}-edition scratch org named '${INPUT_ORG_NAME}' via the DevHub at '${SF_INSTANCE_URL}' (admin=${INPUT_ADMIN_EMAIL}, duration=${INPUT_DURATION_DAYS}d, snapshot='${INPUT_SNAPSHOT}')"
+        # The binary owns the create+poll, OIDC self-mint, AuthCode redemption,
+        # GITHUB_OUTPUT/summary/annotation. Any non-zero exit aborts the step.
+        sf-org-create
+        echo "✓ RESULT: scratch org created — ScratchOrgInfo=${{ steps.create.outputs.scratch_org_info_id }} ScratchOrg=${{ steps.create.outputs.scratch_org_id }} username=${{ steps.create.outputs.username }} login_url=${{ steps.create.outputs.login_url }}"
+        echo "  evidence — credentials JSON written to '${INPUT_CREDENTIALS_OUTPUT}':"
+        ls -la "${INPUT_CREDENTIALS_OUTPUT}"
+        # Show that the file is non-empty and well-formed without leaking the
+        # access token: print only the non-secret keys.
+        echo "  evidence — non-secret keys present in the credentials JSON:"
+        python3 -c "import json,sys; d=json.load(open('${INPUT_CREDENTIALS_OUTPUT}')); print(sorted(k for k in d if 'token' not in k.lower() and 'secret' not in k.lower()))"
+
+    - name: Upload the created scratch-org credentials JSON as a build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: sf-org-create-${{ inputs.org-name }}-credentials
+        path: ${{ inputs.credentials-output }}
+        if-no-files-found: error
