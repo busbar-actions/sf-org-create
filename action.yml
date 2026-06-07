@@ -131,14 +131,14 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Install the sf-org-create binary from actions-dist
+    - name: Install binary
       uses: busbar-actions/setup@main
       with:
         binary: sf-org-create
         version: ${{ inputs.version }}
         binary-repo: ${{ inputs.binary-repo }}
 
-    - name: Create the "${{ inputs.org-name }}" ${{ inputs.edition }}-edition scratch org via the DevHub (${{ inputs.sf-instance-url != '' && inputs.sf-instance-url || inputs.target-instance }})
+    - name: Create scratch
       id: create
       shell: bash
       # Operational selectors arrive as INPUT_*. AUTH (default): self-mint via
@@ -186,19 +186,21 @@ runs:
         ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
       run: |
         set -euo pipefail
-        echo "▶ TESTING: create a ${INPUT_EDITION}-edition scratch org named '${INPUT_ORG_NAME}' via the DevHub at '${SF_INSTANCE_URL}' (admin=${INPUT_ADMIN_EMAIL}, duration=${INPUT_DURATION_DAYS}d, snapshot='${INPUT_SNAPSHOT}')"
+        echo "Creating a ${INPUT_EDITION}-edition scratch org '${INPUT_ORG_NAME}' via the DevHub at '${SF_INSTANCE_URL}' (admin=${INPUT_ADMIN_EMAIL}, duration=${INPUT_DURATION_DAYS}d, snapshot='${INPUT_SNAPSHOT}')"
         # The binary owns the create+poll, OIDC self-mint, AuthCode redemption,
         # GITHUB_OUTPUT/summary/annotation. Any non-zero exit aborts the step.
         sf-org-create
-        echo "✓ RESULT: scratch org created — ScratchOrgInfo=${{ steps.create.outputs.scratch_org_info_id }} ScratchOrg=${{ steps.create.outputs.scratch_org_id }} username=${{ steps.create.outputs.username }} login_url=${{ steps.create.outputs.login_url }}"
-        echo "  evidence — credentials JSON written to '${INPUT_CREDENTIALS_OUTPUT}':"
+        echo "::group::Created scratch org"
+        echo "ScratchOrgInfo=${{ steps.create.outputs.scratch_org_info_id }} ScratchOrg=${{ steps.create.outputs.scratch_org_id }} username=${{ steps.create.outputs.username }} login_url=${{ steps.create.outputs.login_url }}"
+        echo "Credentials JSON written to '${INPUT_CREDENTIALS_OUTPUT}':"
         ls -la "${INPUT_CREDENTIALS_OUTPUT}"
         # Show that the file is non-empty and well-formed without leaking the
         # access token: print only the non-secret keys.
-        echo "  evidence — non-secret keys present in the credentials JSON:"
+        echo "Non-secret keys present in the credentials JSON:"
         python3 -c "import json,sys; d=json.load(open('${INPUT_CREDENTIALS_OUTPUT}')); print(sorted(k for k in d if 'token' not in k.lower() and 'secret' not in k.lower()))"
+        echo "::endgroup::"
 
-    - name: Upload the created scratch-org credentials JSON as a build artifact
+    - name: Upload credentials
       uses: actions/upload-artifact@v4
       with:
         name: sf-org-create-${{ inputs.org-name }}-credentials
