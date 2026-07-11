@@ -36,7 +36,7 @@ The leg-1 (DevHub auth) and leg-2 (new-org token) clients are fully decoupled: l
 | `poll-timeout-secs` | no | `600` | Seconds to wait for the org to reach `Active`. |
 | `credentials-output` | no | `.busbar/scratch-credentials.json` | Where to write the new org's credentials JSON. |
 | `eca-client-id` | no | `` | Optional OIDC tuning → `ECA_CLIENT_ID`. Baked default; override only on a PBO consumer rotation. |
-| `token-handler` | no | `` | Optional OIDC tuning → `TOKEN_HANDLER_APEX`. Defaults to `BBGitHubTokenExchangeHandler`. |
+| `token-handler` | no | `` | Optional OIDC tuning → `TOKEN_HANDLER_APEX`. Defaults to `GitHubTokenExchangeHandler`. |
 | `oidc-audience` | no | `` | Optional OIDC tuning → `OIDC_AUDIENCE`. Defaults to the target instance URL. |
 | `sf-instance-url` | no | `` | **Optional local-dev/advanced override** of the DevHub instance URL; wins over `target-instance`. |
 | `sf-access-token` | no | `` | **Optional local-dev/advanced override only.** A pre-obtained DevHub token; when set the binary skips OIDC self-minting. Leave empty in CI. |

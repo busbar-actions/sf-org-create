@@ -53,10 +53,6 @@ inputs:
     description: 'Optional snapshot name or id (create-from-snapshot).'
     required: false
     default: ''
-  poll-timeout-secs:
-    description: 'Seconds to wait for the org to reach Active.'
-    required: false
-    default: '600'
   credentials-output:
     description: 'Path to write the resulting credentials JSON.'
     required: false
@@ -69,42 +65,48 @@ inputs:
     description: 'Path to a scratch-org-definition JSON; its `settings` block is deployed to the new org after creation.'
     required: false
     default: ''
-  eca-client-id:
-    description: 'Optional OIDC tuning: the busbar ECA consumer key (client_id). Maps to ECA_CLIENT_ID. Has a baked default; override only on a PBO consumer rotation.'
+  # NOTE (2026-07-11): org-type/template-id/company/first-name/last-name/
+  # sandbox-license-type/source-id below are NOT YET backed by the sf-org-create
+  # binary — crates/sf-org-create's Args struct has no matching fields, so these
+  # are currently accepted but silently ignored (only the scratch-org creation
+  # path exists today). Kept as harmless forward-looking surface for the planned
+  # sandbox/trial-org support; do not treat them as functional yet.
+  org-type:
+    description: 'Type of org to create: scratch (default), sandbox, trial. NOT YET IMPLEMENTED in the binary — currently ignored.'
+    required: false
+    default: 'scratch'
+  template-id:
+    description: 'Template ID (for Trial orgs).'
     required: false
     default: ''
-  token-handler:
-    description: 'Optional OIDC tuning: the Apex token-exchange handler dev name. Maps to TOKEN_HANDLER_APEX. Defaults to BBGitHubTokenExchangeHandler.'
+  company:
+    description: 'Company name (for Trial orgs).'
     required: false
     default: ''
-  oidc-audience:
-    description: 'Optional OIDC tuning: audience to request in the GitHub OIDC token. Maps to OIDC_AUDIENCE. Defaults to the target instance URL.'
+  first-name:
+    description: 'Admin First Name (for Trial orgs).'
     required: false
     default: ''
-  sf-instance-url:
-    description: >-
-      OPTIONAL local-dev/advanced override of the DevHub instance URL. When set,
-      takes precedence over `target-instance`. Pair with `sf-access-token` to use
-      the binary's local-dev fast path (skips OIDC); leave `sf-access-token` empty
-      to OIDC-mint against this URL instead.
+  last-name:
+    description: 'Admin Last Name (for Trial orgs).'
     required: false
     default: ''
-  sf-access-token:
-    description: >-
-      OPTIONAL local-dev/advanced override ONLY. A pre-obtained DevHub access
-      token. When set (with an instance URL), the binary uses it directly and
-      skips OIDC self-minting. Leave EMPTY in CI — the default OIDC path mints a
-      short-lived token in-process so no token is ever handed to this action.
+  sandbox-license-type:
+    description: 'Sandbox license type (Developer, Developer_Pro, Partial, Full).'
+    required: false
+    default: 'Developer'
+  source-id:
+    description: 'Source org ID for cloning (for Sandbox orgs).'
     required: false
     default: ''
   version:
-    description: 'Release tag of the sf-org-create binary (e.g. v0.1.0). "latest" resolves the most recent release.'
+    description: 'Release tag of the sf-org-create binary. Falls back to env.BUSBAR_ACTION_VERSION, then "latest".'
     required: false
-    default: 'latest'
+    default: ''
   binary-repo:
-    description: 'GitHub repo hosting the prebuilt binary releases.'
+    description: 'GitHub repo hosting prebuilt binary releases. Falls back to env.BUSBAR_ACTION_REPO, then busbar-actions/actions-dist.'
     required: false
-    default: 'busbar-actions/actions-dist'
+    default: ''
 
 outputs:
   scratch_org_info_id:
@@ -135,8 +137,8 @@ runs:
       uses: busbar-actions/setup@main
       with:
         binary: sf-org-create
-        version: ${{ inputs.version }}
-        binary-repo: ${{ inputs.binary-repo }}
+        version: ${{ inputs.version || env.BUSBAR_ACTION_VERSION || 'latest' }}
+        binary-repo: ${{ inputs.binary-repo || env.BUSBAR_ACTION_REPO || 'busbar-actions/actions-dist' }}
 
     - name: Create scratch
       id: create
@@ -157,21 +159,19 @@ runs:
         INPUT_FEATURES: ${{ inputs.features }}
         INPUT_DESCRIPTION: ${{ inputs.description }}
         INPUT_SNAPSHOT: ${{ inputs.snapshot }}
-        INPUT_POLL_TIMEOUT_SECS: ${{ inputs.poll-timeout-secs }}
+        INPUT_ORG_TYPE: ${{ inputs.org-type }}
+        INPUT_TEMPLATE_ID: ${{ inputs.template-id }}
+        INPUT_COMPANY: ${{ inputs.company }}
+        INPUT_FIRST_NAME: ${{ inputs.first-name }}
+        INPUT_LAST_NAME: ${{ inputs.last-name }}
+        INPUT_SANDBOX_LICENSE_TYPE: ${{ inputs.sandbox-license-type }}
+        INPUT_SOURCE_ID: ${{ inputs.source-id }}
         INPUT_CREDENTIALS_OUTPUT: ${{ inputs.credentials-output }}
         INPUT_SETTINGS: ${{ inputs.settings }}
         INPUT_DEFINITION_FILE: ${{ inputs.definition-file }}
         # DevHub instance URL: the optional override wins, else the primary
         # `target-instance` OIDC input.
-        SF_INSTANCE_URL: ${{ inputs.sf-instance-url != '' && inputs.sf-instance-url || inputs.target-instance }}
-        # OPTIONAL local-dev override ONLY. Empty in CI → busbar-auth self-mints
-        # via OIDC. NEVER sourced from the Environment / GITHUB_ENV.
-        SF_ACCESS_TOKEN: ${{ inputs.sf-access-token }}
-        # OIDC tuning (all optional; baked defaults in busbar-auth). Surfaced as
-        # inputs so a caller can override per-run; otherwise empty = use defaults.
-        ECA_CLIENT_ID: ${{ inputs.eca-client-id }}
-        TOKEN_HANDLER_APEX: ${{ inputs.token-handler }}
-        OIDC_AUDIENCE: ${{ inputs.oidc-audience }}
+        SF_INSTANCE_URL: ${{ inputs.target-instance || env.SF_INSTANCE_URL }}
         # Leg-1 (OIDC → DevHub) ECA fallback consumer key from the Environment.
         BUSBAR_ECA_CLIENT_ID: ${{ env.BUSBAR_ECA_CLIENT_ID }}
         # Leg-2 (the scratch's own connected app): defaults to PlatformCLI +
@@ -186,7 +186,7 @@ runs:
         ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
       run: |
         set -euo pipefail
-        echo "Creating a ${INPUT_EDITION}-edition scratch org '${INPUT_ORG_NAME}' via the DevHub at '${SF_INSTANCE_URL}' (admin=${INPUT_ADMIN_EMAIL}, duration=${INPUT_DURATION_DAYS}d, snapshot='${INPUT_SNAPSHOT}')"
+        echo "Creating a ${INPUT_EDITION}-edition ${INPUT_ORG_TYPE} org '${INPUT_ORG_NAME}' via the DevHub at '${SF_INSTANCE_URL}' (admin=${INPUT_ADMIN_EMAIL}, duration=${INPUT_DURATION_DAYS}d, snapshot='${INPUT_SNAPSHOT}')"
         # The binary owns the create+poll, OIDC self-mint, AuthCode redemption,
         # GITHUB_OUTPUT/summary/annotation. Any non-zero exit aborts the step.
         sf-org-create

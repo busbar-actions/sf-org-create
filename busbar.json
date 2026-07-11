@@ -22,7 +22,14 @@
       { "name": "admin-email", "type": "string", "label": "Admin email", "required": true, "description": "Admin email for the scratch org." },
       { "name": "snapshot", "type": "string", "label": "Snapshot (optional)", "default": "", "description": "Snapshot name or id to create the org from (create-from-snapshot)." },
       { "name": "edition", "type": "enum", "label": "Edition", "options": ["Developer", "Enterprise", "Group", "Professional", "Partner Developer"], "default": "Developer", "description": "Scratch org edition." },
-      { "name": "duration-days", "type": "string", "label": "Duration (days)", "default": "7", "description": "How long the scratch org lives (1-30)." }
+      { "name": "org-type", "type": "enum", "label": "Org type", "options": ["scratch", "sandbox", "trial"], "default": "scratch", "description": "Type of org to create." },
+      { "name": "duration-days", "type": "string", "label": "Duration (days)", "default": "7", "description": "How long the scratch org lives (1-30)." },
+      { "name": "sandbox-license-type", "type": "enum", "label": "Sandbox license type", "options": ["Developer", "Developer_Pro", "Partial", "Full"], "default": "Developer", "description": "Sandbox license type (only for sandboxes)." },
+      { "name": "source-id", "type": "string", "label": "Source ID", "default": "", "description": "Source org ID for cloning (only for sandboxes)." },
+      { "name": "template-id", "type": "string", "label": "Template ID", "default": "", "description": "Template ID (only for trial orgs)." },
+      { "name": "company", "type": "string", "label": "Company", "default": "", "description": "Company name (only for trial orgs)." },
+      { "name": "first-name", "type": "string", "label": "First Name", "default": "", "description": "Admin First Name (only for trial orgs)." },
+      { "name": "last-name", "type": "string", "label": "Last Name", "default": "", "description": "Admin Last Name (only for trial orgs)." }
     ],
     "requires": [],
     "provides": ["sf-session"]
