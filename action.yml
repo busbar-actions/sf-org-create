@@ -65,6 +65,30 @@ inputs:
     description: 'Path to a scratch-org-definition JSON; its `settings` block is deployed to the new org after creation.'
     required: false
     default: ''
+  busbar-package:
+    description: >-
+      busbar (core) package version (04t id or alias) to install via the
+      full Busbar setup sequence (packages, ECA policy, permset, handler,
+      trust rules), run IN-PROCESS immediately after the new org's AuthCode
+      is redeemed — the admin session never leaves the binary. Empty (default)
+      skips setup entirely: the org is only created, matching prior behavior.
+    required: false
+    default: ''
+  github-package:
+    description: 'busbar-github (adapter) package version (04t id or alias) to install. Required if busbar-package is set.'
+    required: false
+    default: ''
+  trust-specs:
+    description: >-
+      Path to a trust-rule spec file/directory (relative to the checked-out
+      repo) to establish OIDC trust during setup. Only used when busbar-package
+      is set. Empty (default) skips the trust phase.
+    required: false
+    default: ''
+  hub-instance-url:
+    description: 'Instance URL of a Busbar Hub org to register the new org with. Only used when busbar-package is set. Empty (default) skips Hub registration.'
+    required: false
+    default: ''
   # NOTE (2026-07-11): org-type/template-id/company/first-name/last-name/
   # sandbox-license-type/source-id below are NOT YET backed by the sf-org-create
   # binary — crates/sf-org-create's Args struct has no matching fields, so these
@@ -169,6 +193,14 @@ runs:
         INPUT_CREDENTIALS_OUTPUT: ${{ inputs.credentials-output }}
         INPUT_SETTINGS: ${{ inputs.settings }}
         INPUT_DEFINITION_FILE: ${{ inputs.definition-file }}
+        # Optional in-process Busbar setup (packages/ECA policy/permset/handler/
+        # trust rules), run by the binary itself right after AuthCode redemption.
+        # Presence of INPUT_BUSBAR_PACKAGE is what triggers it — absent/empty
+        # means "just create the org" (see crates/sf-org-create/src/main.rs).
+        INPUT_BUSBAR_PACKAGE: ${{ inputs.busbar-package }}
+        INPUT_GITHUB_PACKAGE: ${{ inputs.github-package }}
+        INPUT_TRUST_SPECS: ${{ inputs.trust-specs }}
+        INPUT_HUB_INSTANCE_URL: ${{ inputs.hub-instance-url }}
         # DevHub instance URL: the optional override wins, else the primary
         # `target-instance` OIDC input.
         SF_INSTANCE_URL: ${{ inputs.target-instance || env.SF_INSTANCE_URL }}

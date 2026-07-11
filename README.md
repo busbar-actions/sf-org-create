@@ -35,6 +35,10 @@ The leg-1 (DevHub auth) and leg-2 (new-org token) clients are fully decoupled: l
 | `snapshot` | no | `` | Snapshot name or id — create-from-snapshot. |
 | `poll-timeout-secs` | no | `600` | Seconds to wait for the org to reach `Active`. |
 | `credentials-output` | no | `.busbar/scratch-credentials.json` | Where to write the new org's credentials JSON. |
+| `busbar-package` | no | `` | busbar (core) package version (04t id or alias). Presence triggers the in-process Busbar setup sequence (packages, ECA policy, permset, handler, trust rules) right after AuthCode redemption; empty skips it (create-only). |
+| `github-package` | no | `` | busbar-github (adapter) package version (04t id or alias). Required if `busbar-package` is set. |
+| `trust-specs` | no | `` | Path to a trust-rule spec file/directory (relative to the checked-out repo). Only used when `busbar-package` is set; empty skips the trust phase. |
+| `hub-instance-url` | no | `` | Instance URL of a Busbar Hub org to register the new org with. Only used when `busbar-package` is set; empty skips Hub registration. |
 | `eca-client-id` | no | `` | Optional OIDC tuning → `ECA_CLIENT_ID`. Baked default; override only on a PBO consumer rotation. |
 | `token-handler` | no | `` | Optional OIDC tuning → `TOKEN_HANDLER_APEX`. Defaults to `GitHubTokenExchangeHandler`. |
 | `oidc-audience` | no | `` | Optional OIDC tuning → `OIDC_AUDIENCE`. Defaults to the target instance URL. |
