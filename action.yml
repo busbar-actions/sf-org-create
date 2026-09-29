@@ -232,9 +232,8 @@ runs:
         python3 -c "import json,sys; d=json.load(open('${INPUT_CREDENTIALS_OUTPUT}')); print(sorted(k for k in d if 'token' not in k.lower() and 'secret' not in k.lower()))"
         echo "::endgroup::"
 
-    - name: Upload credentials
-      uses: actions/upload-artifact@v4
-      with:
-        name: sf-org-create-${{ inputs.org-name }}-credentials
-        path: ${{ inputs.credentials-output }}
-        if-no-files-found: error
+    # NO artifact upload of the credentials file. It holds the new org's LIVE
+    # admin access token; uploading it made that session downloadable by anyone
+    # who can read the run (for a public repo: any signed-in GitHub user) for
+    # the artifact's whole retention period. The file stays on the runner, in
+    # the path the caller chose, and the caller is responsible for wiping it.

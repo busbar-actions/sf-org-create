@@ -59,7 +59,7 @@ The leg-1 (DevHub auth) and leg-2 (new-org token) clients are fully decoupled: l
 | `login-url` | Login URL for the created scratch org. |
 | `credentials-path` | Path to the JSON file with the new org's `access_token` + `instance_url`. |
 
-The new org's `access_token` is intentionally **not** exposed as a step output (outputs get logged). It is masked, written only to the credentials file, and handed off to downstream steps via that file.
+The new org's `access_token` is intentionally **not** exposed as a step output (outputs get logged), and the credentials file is **not** uploaded as an artifact. It is masked and written only to the credentials file on the runner. Write it under `RUNNER_TEMP` and delete it in an `if: always()` step once you have read what you need from it.
 
 ## Auth & permissions model — OIDC self-mint (default)
 
